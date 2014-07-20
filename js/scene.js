@@ -27,12 +27,13 @@ define([
 
 		var camera;
 		var scene, renderer;
+		var parentScreen;
 		var screens = [];
 		var frames = [];
 		var controls;
 		var self = this;
 		var activeScreen, nextScreen = null;
-		var _spacing = 1000;
+		var _spacing = 500;
 		var _rate = 13;
 		var _focalVector;
 
@@ -50,7 +51,18 @@ define([
 
 		var init = function() {
 			scene = new THREE.Scene();
-			
+			var $parentScreenEl = 
+					$('<div>' +
+					'</div>');
+				$parentScreenEl.css({
+					width:window.innerWidth,
+					height:window.innerHeight
+				});
+
+			parentScreen = new THREE.CSS3DObject($parentScreenEl[0]);
+			parentScreen.rotation.reorder("ZYX");
+			scene.add(parentScreen);
+
 			for ( var i = 0; i < self.data.length; i ++ ) {
 
 				var screen = self.data[i];
@@ -65,47 +77,18 @@ define([
 					height:window.innerHeight-20,
 					padding:10,
 					background:screen.color
-				});//new THREE.Color( Math.random() * 0xffffff ).getStyle();
-
-				var $camEl = 
-					$('<div>' +
-						'<h3>'+i+'</h3>' +
-					'</div>');
-				$camEl.css({
-					padding:"12px",
-					'line-height':'20px',
-					background:screen.color
 				});
 
 				var object = new THREE.CSS3DObject( $screenEl[0] );
-				object.position.x = 0;
-				object.position.y = 0;
-				object.position.z =  _spacing*1.1 + -i * _spacing*1.1;
+				object.position.x = - _spacing + Math.random()* _spacing *2;
+				object.position.y = - _spacing + Math.random()* _spacing *2;
+				object.position.z = -(i * _spacing*1.2);
 				object.rotation.x = Math.PI/2 - Math.random() * Math.PI ;
 				object.rotation.y = Math.PI/2 - Math.random() * Math.PI;
 				object.rotation.z = Math.PI/2 - Math.random();
 				
 				screens.push(object);
-				scene.add( object );
-				
-
-				var cam = new THREE.CSS3DObject( $camEl[0] );
-				var camPosition = _getCameraPositionForScreen(i);
-
-				cam.position.set(
-					camPosition.position.x,
-					camPosition.position.y,
-					camPosition.position.z
-				);
-
-				cam.rotation.set(
-					camPosition.rotation.x, 
-					camPosition.rotation.y, 
-					camPosition.rotation.z
-				);
-
-				frames.push(cam);
-				scene.add(cam);
+				parentScreen.add( object );
 
 			}
 
@@ -116,13 +99,17 @@ define([
 				window.innerWidth / window.innerHeight
 			);
 
-			// camera = new THREE.OrthographicCamera( 
-			// 	window.innerWidth/-2, window.innerWidth/2, window.innerHeight /-2, window.innerHeight/2, 1, 1200
-			// );
+			var $camEl = $('<div>CAMERA</div>');
+				$camEl.css({
+					width:window.innerWidth,
+					height:window.innerHeight,
+					'text-align': 'center',
+					'line-height': window.innerHeight/2,
+					background:'rgba(0,0,0,.5)',
+					border:'10px solid #FF0000'
+				});
 
-			var camDistance = _getCamDistanceForFrame(window.innerHeight, vFOV);
-
-			console.log("camDistance :: " + camDistance);
+			camera.position.set(0,0,_spacing*1.1);
 
 			renderer = new CSS3DRenderer();
 			renderer.setSize( window.innerWidth, window.innerHeight );
@@ -197,17 +184,42 @@ define([
 		function _getCameraPositionForScreen(index){
 
 			var screenTarget = screens[index];
-			var focalDistance = new THREE.Vector3(0,0,_spacing*1.1);
+			var focalDistance = new THREE.Vector3(0,0,_spacing);
 			
 			var targetPosition = focalDistance.clone();
 			targetPosition.applyEuler(screenTarget.rotation);
 			targetPosition.add(screenTarget.position);
-			
-			console.log(screenTarget.rotation);
-			console.log(targetPosition);
 
 			var targetRotation = screenTarget.rotation.clone();
+
+			return {position:targetPosition, rotation:targetRotation};
+
+		}
+
+		function _getParentPositionForScreen(index){
+
+			var slideTarget = screens[index];
+			var slideRotation = slideTarget.rotation;
+			var slidePosition = slideTarget.position;
+			var targetPosition = slidePosition.clone();
+
+			var targetRotation = new THREE.Euler(
+				-slideRotation.x,
+				-slideRotation.y,
+				-slideRotation.z,
+				//This magical line of code thanks to Evan Ribnick
+				//3M Computer Vision Engineer.  
+				//Took me 3 days of beating my head
+				//Took him 3 minutes, and a better understanding
+				//of the Euler (pronounced "oy-ler") order
+				"ZYX"
+			);
+
+			targetPosition.applyEuler(targetRotation);
 			
+			targetPosition.x*= -1;
+			targetPosition.y*= -1;
+			targetPosition.z*= -1;
 
 			return {position:targetPosition, rotation:targetRotation};
 
@@ -224,7 +236,7 @@ define([
 		function invalidateCamera(){
 
 			if(null !== nextScreen && nextScreen !== activeScreen){
-				var frame = frames[nextScreen];
+				var frame = _getParentPositionForScreen(nextScreen);//screens[nextScreen];
 
 				/*camera.position.set(
 					frame.position.x, 
@@ -241,25 +253,28 @@ define([
 				//camera.lookAt(screens[nextScreen].position);
 
 
-				camera.position.x -= (camera.position.x - frame.position.x)/_rate;
-				camera.position.y -= (camera.position.y - frame.position.y)/_rate;
-				camera.position.z -= (camera.position.z - frame.position.z)/_rate;
-				camera.rotation.x -= (camera.rotation.x - frame.rotation.x)/_rate;
-				camera.rotation.y -= (camera.rotation.y - frame.rotation.y)/_rate;
-				camera.rotation.z -= (camera.rotation.z - frame.rotation.z)/_rate;
+				parentScreen.position.x -= (parentScreen.position.x - frame.position.x)/_rate;
+				parentScreen.position.y -= (parentScreen.position.y - frame.position.y)/_rate;
+				parentScreen.position.z -= (parentScreen.position.z - frame.position.z)/_rate;
+				parentScreen.rotation.z -= (parentScreen.rotation.z - frame.rotation.z)/_rate;
+				parentScreen.rotation.y -= (parentScreen.rotation.y - frame.rotation.y)/_rate;
+				parentScreen.rotation.x -= (parentScreen.rotation.x - frame.rotation.x)/_rate;
 
-				if(camera.position.distanceTo(frame.position) <= .1){
-						camera.position.set(
+				if(parentScreen.position.distanceTo(frame.position) <= .1){
+					parentScreen.position.set(
 						frame.position.x, 
 						frame.position.y, 
 						frame.position.z
 					);
+
+					//console.log(parentScreen.position);
 					
-					camera.rotation.set(
-						frame.rotation.x, 
-						frame.rotation.y, 
-						frame.rotation.z
-					);
+					// parentScreen.rotation.set(
+					//  	frame.rotation.x, 
+					//  	frame.rotation.y, 
+					//  	frame.rotation.z
+					//  );
+
 					activateComplete();
 				}
 				//
