@@ -1,323 +1,293 @@
 define([
 	"jquery", 
 	"three", 
-	"three-css3d", 
-	"three-trackball", 
+	"three-css3d",  
 	"tween"
 	], 
 
-	function($, THREE, CSS3DRenderer, TrackballControls, TWEEN){
-
+	function($, THREE, CSS3DRenderer, TWEEN){
 
 	//----------------------------------------------------------
 	// Private Static Vars
 	//----------------------------------------------------------
 
-	var VERSION = 0.1;
+	var VERSION = 0.2;
 
 	//-------------------------------------------------------
 	//  NameSpace
 	//-------------------------------------------------------
 
-	var Scene = function(selector, data){
+	var Scene = function(selector, contents){
 
 	//------------------------------------------------------
-	//  Private Instance Vars
+	//  Private Parameters
+	//------------------------------------------------------
+	
+	var _self = this;             /* reference to instance for clear scoping in callbacks and events */
+	var _contents = contents;     /* HTMl content to render as frames */
+	var _frame = {
+			width:window.innerWidth,
+			height:window.innerHeight,
+			padding:20,
+			focalLength:1500,
+			rate:13.7
+		}
+
+
+	//------------------------------------------------------
+	//  Private Controller Properties
 	//------------------------------------------------------
 
-		var camera;
-		var scene, renderer;
-		var parentScreen;
-		var screens = [];
-		var frames = [];
-		var controls;
-		var self = this;
-		var activeScreen, nextScreen = null;
-		var _spacing = 500;
-		var _rate = 13;
-		var _focalVector;
+	var _scene;                   /* Root container of 3D visualization */
+	var _camera;                  /* 3D Camera for visualizing scene */
+	var _renderer;                /* Draws scene/camera configuration to display */
 
 	//------------------------------------------------------
-	//  Public Instance Vars
+	//  Private Display Properties
 	//------------------------------------------------------
 
-		this.$el = $(selector);
-		this.data = data;
-
+	var _node = $(selector);
+	var _world = null;            /* container for all child frames */
+	var _slides = [];             /* collection of 3D positioned frames within the _world */
+	var _activeSlide = null;      /* selected frame to display fullscreen in camera view */
+	var _nextSlide = null;        /* frame to set active upon transition */
 
 	//------------------------------------------------------
 	//  Initialization
 	//------------------------------------------------------
 
-		var init = function() {
-			scene = new THREE.Scene();
-			var $parentScreenEl = 
-					$('<div>' +
-					'</div>');
-				$parentScreenEl.css({
-					width:window.innerWidth,
-					height:window.innerHeight
-				});
-
-			parentScreen = new THREE.CSS3DObject($parentScreenEl[0]);
-			parentScreen.rotation.reorder("ZYX");
-			scene.add(parentScreen);
-
-			for ( var i = 0; i < self.data.length; i ++ ) {
-
-				var screen = self.data[i];
-
-				var $screenEl = 
-					$('<div>' +
-						'<h2>'+screen.title+'</h2>' +
-						'<p>'+screen.body+'</p>' +
-					'</div>');
-				$screenEl.css({
-					width:window.innerWidth-20,
-					height:window.innerHeight-20,
-					padding:10,
-					background:screen.color
-				});
-
-				var object = new THREE.CSS3DObject( $screenEl[0] );
-				object.position.x = - _spacing + Math.random()* _spacing *2;
-				object.position.y = - _spacing + Math.random()* _spacing *2;
-				object.position.z = -(i * _spacing*1.2);
-				object.rotation.x = Math.PI/2 - Math.random() * Math.PI ;
-				object.rotation.y = Math.PI/2 - Math.random() * Math.PI;
-				object.rotation.z = Math.PI/2 - Math.random();
-				
-				screens.push(object);
-				parentScreen.add( object );
-
-			}
-
-			var vFOV = _wtfFOVFromFrame(window.innerWidth, window.innerHeight, _spacing);
-
-			camera = new THREE.PerspectiveCamera( 
-				vFOV, 
-				window.innerWidth / window.innerHeight
-			);
-
-			var $camEl = $('<div>CAMERA</div>');
-				$camEl.css({
-					width:window.innerWidth,
-					height:window.innerHeight,
-					'text-align': 'center',
-					'line-height': window.innerHeight/2,
-					background:'rgba(0,0,0,.5)',
-					border:'10px solid #FF0000'
-				});
-
-			camera.position.set(0,0,_spacing*1.1);
-
-			renderer = new CSS3DRenderer();
-			renderer.setSize( window.innerWidth, window.innerHeight );
-			renderer.domElement.style.position = 'absolute';
-			renderer.domElement.style.top = 0;
-
-			nextScreen = 0; 
+	function _init() {
 		
-			self.$el.append( $(renderer.domElement) );
-			animate();
+		_initializeParameters();
+		_initScene();
+		_initFrames();
+		_animate();
 
-		}
+	}
 
-		//------------------------------------------------------
-		//  Public Methods
-		//------------------------------------------------------
+	function _initializeParameters(){
+		_nextSlide = 0;
+	}
 
-		this.activateScreen = function(index){
-			console.log("scene :: activateScreen : " + index);
-			nextScreen = index;
-			//animate to screen
+	function _initScene(){
+		_scene = new THREE.Scene();
+		
+		//TODO: Determine why camera position must be 1.1x focal length
+		_camera = new THREE.PerspectiveCamera(
+			_wtfFieldOfView(
+				_frame.height, 
+				_frame.focalLength,
+				-_frame.focalLength*_contents.length+1,
+				0),
+			_frame.width/_frame.height
+		);
 
-			// console.log(
-			// 	"camera vector : " 
-			// 	+ cameraVector.x 
-			// 	+ " : " + cameraVector.y 
-			// 	+ " : " + cameraVector.z
-			// );
+		_camera.position.set(0,0,_frame.focalLength*1.1);
+		
+		_renderer = new CSS3DRenderer();
+		_renderer.setSize( _frame.width, _frame.height );
+		
+		//TODO: Set this up with CSS
+		_renderer.domElement.style.position = 'absolute';
+		_renderer.domElement.style.top = 0;
 
-			// console.log(
-			// 	"distance to activeScreen : " 
-			// 	+ cameraVector.distanceTo(eposition)
-			// );
-			
+		_node.append( $(_renderer.domElement) );
+	}
 
-			//camera.lookAt(eposition);
-		}
+	function _initFrames(){
+		_createWorld();
+		_createSlidesFromContent();
+	}
 
-		this.next = function(){
-			this.activateScreen((activeScreen < screens.length-1) ? activeScreen+1 : 0);
-		}
+	function _createWorld(){
+		var $worldEl = $('<div></div>');
+			$worldEl.css({width:_frame.width,height:_frame.height});
 
-		this.prev = function(){
-			this.activateScreen((activeScreen >= 0) ? activeScreen-1 :  screens.length-1);
-		}
+		_world = new THREE.CSS3DObject($worldEl[0]);
+		_world.rotation.reorder("ZYX");
+		_scene.add(_world);
+	}
 
+	function _createSlidesFromContent(){
+		
+		var count = _contents.length;
 
-		//------------------------------------------------------
-		//  Private Methods
-		//------------------------------------------------------
+		$.each(_contents, function(index, content){
 
-		//WTF - Whats The Frustom? Field Of View
-		function _wtfFOVFromFrame(frameW, frameH, distance){
+			var $slideEl, _slide, len;
 
-			//https://github.com/mrdoob/three.js/issues/1239
-			// vertical frustum field of view angle in radians = 2 * arctan(frame height / (2 * focal length))
-			// multiply by 180/Math.PI for angle in degrees
-			return 2 * Math.atan(frameH / ( 2 * distance )) * 180/Math.PI;
+			$slideEl = $(
+				'<div>' +
+					'<h2>'+content.title+'</h2>' +
+					'<p>'+content.body+'</p>' +
+				'</div>'
+			).css({
+				width:_frame.width-_frame.padding*2,
+				height:_frame.height-_frame.padding*2,
+				padding:_frame.padding,
+				background:content.color
+			});
 
-		}
+			_slide = new THREE.CSS3DObject( $slideEl[0] );
+			_slides.push(_slide);
 
-		function _getCamDistanceForFrame(frameH, vFOV){
-			//http://stackoverflow.com/questions/2866350/move-camera-to-fit-3d-scene
-			//a = field of view angle
-			//d = distance from camera
-			//s = frame size
+			len = _frame.focalLength
 
-			var distance = (frameH/2) / Math.tan(vFOV/2);
-			return distance;
-		}
-
-		function _getCameraPositionForScreen(index){
-
-			var screenTarget = screens[index];
-			var focalDistance = new THREE.Vector3(0,0,_spacing);
-			
-			var targetPosition = focalDistance.clone();
-			targetPosition.applyEuler(screenTarget.rotation);
-			targetPosition.add(screenTarget.position);
-
-			var targetRotation = screenTarget.rotation.clone();
-
-			return {position:targetPosition, rotation:targetRotation};
-
-		}
-
-		function _getParentPositionForScreen(index){
-
-			var slideTarget = screens[index];
-			var slideRotation = slideTarget.rotation;
-			var slidePosition = slideTarget.position;
-			var targetPosition = slidePosition.clone();
-
-			var targetRotation = new THREE.Euler(
-				-slideRotation.x,
-				-slideRotation.y,
-				-slideRotation.z,
-				//This magical line of code thanks to Evan Ribnick
-				//3M Computer Vision Engineer.  
-				//Took me 3 days of beating my head
-				//Took him 3 minutes, and a better understanding
-				//of the Euler (pronounced "oy-ler") order
-				"ZYX"
+			//apply random spacing and random rotation
+			_slide.position.set(
+				- len + Math.random() * len * 2,
+				- len + Math.random() * len * 2,
+				- len + Math.random() * count
 			);
 
-			targetPosition.applyEuler(targetRotation);
+			_slide.rotation.set(
+				Math.PI/2 - Math.random() * Math.PI,
+				Math.PI/2 - Math.random() * Math.PI,
+				Math.PI/2 - Math.random()
+			);
+
+			_world.add( _slide );
+
+		}); 
+	}
+
+	//------------------------------------------------------
+	//  Public Methods
+	//------------------------------------------------------
+
+	this.activateSlide = function(index){
+		_nextSlide = index;
+	}
+
+	this.next = function(){
+		this.activateSlide((_activeSlide < _slides.length-1) ? _activeSlide+1 : 0);
+	}
+
+	this.prev = function(){
+		this.activateSlide((_activeSlide >= 0) ? _activeSlide-1 :  _slides.length-1);
+	}
+
+
+	//------------------------------------------------------
+	//  Private Methods
+	//------------------------------------------------------
+
+	//WTF - What The Frustom is Field Of View
+	function _wtfFieldOfView(frameH, distance){
+
+		//https://github.com/mrdoob/three.js/issues/1239
+		// vertical frustum field of view angle in radians = 2 * arctan(frame height / (2 * focal length))
+		// multiply by 180/Math.PI for angle in degrees
+		return 2 * Math.atan(frameH / ( 2 * distance )) * 180/Math.PI;
+
+	}
+
+	function _wtfWorldForSlide(index){
+
+		var slideTarget = _slides[index];
+		var slideRotation = slideTarget.rotation;
+		var slidePosition = slideTarget.position;
+		var targetPosition = slidePosition.clone();
+
+		var targetRotation = new THREE.Euler(
+			-slideRotation.x,
+			-slideRotation.y,
+			-slideRotation.z,
+			//This magical line of code thanks to Evan Ribnick
+			//3M Computer Vision Engineer.  
+			//Took me 3 days of beating my head
+			//Took him 3 minutes, and a better understanding
+			//of the Euler (pronounced "oy-ler") order
+			"ZYX"
+		);
+
+		targetPosition.applyEuler(targetRotation);
+		
+		targetPosition.x*= -1;
+		targetPosition.y*= -1;
+		targetPosition.z*= -1;
+
+		return {position:targetPosition, rotation:targetRotation};
+
+	}
+
+	//------------------------------------------------------
+	//  Display Methods
+	//------------------------------------------------------
+
+	function _animate() {
+
+		requestAnimationFrame( _animate );
+		_invalidateWorld();
+		_renderer.render( _scene, _camera );
+		
+	}
+
+	function _invalidateWorld(){
+
+		if(null !== _nextSlide && _nextSlide !== _activeSlide){
+
+			var target = _wtfWorldForSlide(_nextSlide);
 			
-			targetPosition.x*= -1;
-			targetPosition.y*= -1;
-			targetPosition.z*= -1;
-
-			return {position:targetPosition, rotation:targetRotation};
-
-		}
-
-		function invalidateControls(){
-			if(!controls){
-				controls = new TrackballControls( camera );
-			}else{
-				controls.update();
-			}
-		}
-
-		function invalidateCamera(){
-
-			if(null !== nextScreen && nextScreen !== activeScreen){
-				var frame = _getParentPositionForScreen(nextScreen);//screens[nextScreen];
-
-				/*camera.position.set(
-					frame.position.x, 
-					frame.position.y, 
-					frame.position.z
-				);
+			//snap to target position if distance remaining is less than .1 "mm"
+			if(_world.position.distanceTo(target.position) <= .1){
 				
-				camera.rotation.set(
-					frame.rotation.x, 
-					frame.rotation.y, 
-					frame.rotation.z
-				);*/
+				_world.position.set(
+					target.position.x, 
+					target.position.y, 
+					target.position.z
+				);
 
-				//camera.lookAt(screens[nextScreen].position);
+				_world.rotation.set(
+					target.rotation.x, 
+					target.rotation.y, 
+					target.rotation.z
+				);
 
+				_activateComplete();
 
-				parentScreen.position.x -= (parentScreen.position.x - frame.position.x)/_rate;
-				parentScreen.position.y -= (parentScreen.position.y - frame.position.y)/_rate;
-				parentScreen.position.z -= (parentScreen.position.z - frame.position.z)/_rate;
-				parentScreen.rotation.z -= (parentScreen.rotation.z - frame.rotation.z)/_rate;
-				parentScreen.rotation.y -= (parentScreen.rotation.y - frame.rotation.y)/_rate;
-				parentScreen.rotation.x -= (parentScreen.rotation.x - frame.rotation.x)/_rate;
+			}else{
 
-				if(parentScreen.position.distanceTo(frame.position) <= .1){
-					parentScreen.position.set(
-						frame.position.x, 
-						frame.position.y, 
-						frame.position.z
-					);
+				//advance world position toward position inverse to targeted slide
+				_world.position.x -= (_world.position.x - target.position.x)/_frame.rate;
+				_world.position.y -= (_world.position.y - target.position.y)/_frame.rate;
+				_world.position.z -= (_world.position.z - target.position.z)/_frame.rate;
+				
+				//advance world "euler" rotation toward rotation inverse of targeted slide
+				//apply rotation in reverse "ZYX" order to ensure 
+				_world.rotation.z -= (_world.rotation.z - target.rotation.z)/_frame.rate;
+				_world.rotation.y -= (_world.rotation.y - target.rotation.y)/_frame.rate;
+				_world.rotation.x -= (_world.rotation.x - target.rotation.x)/_frame.rate;
 
-					//console.log(parentScreen.position);
-					
-					// parentScreen.rotation.set(
-					//  	frame.rotation.x, 
-					//  	frame.rotation.y, 
-					//  	frame.rotation.z
-					//  );
-
-					activateComplete();
-				}
-				//
 			}
 
-			
+		}	
 
-		}
+	}
 
-		function activateComplete(){
-			console.log("activateComplete");
-			activeScreen = nextScreen;
-			nextScreen = null;
-		}
+	//------------------------------------------------------
+	//  Events
+	//------------------------------------------------------
 
-		//------------------------------------------------------
-		//  Display Methods
-		//------------------------------------------------------
+	function _activateComplete(){
+		_activeSlide = _nextSlide;
+		_nextSlide = null;
+	}
 
-		function animate() {
+	//------------------------------------------------------
+	//  Getters/Setters
+	//------------------------------------------------------
 
-			requestAnimationFrame( animate );
-			invalidateCamera();
-			//invalidateControls();
-			renderer.render( scene, camera );
-			
-			
-		}
+	this.getActiveSlide = function(){
+		return (activeSlide) ? activeSlide : _slides[0];
+	}
 
-		//------------------------------------------------------
-		//  Getters/Setters
-		//------------------------------------------------------
+	//------------------------------------------------------
+	//  Actuation
+	//------------------------------------------------------
 
-		this.getActiveScreen = function(){
-			return (activeScreen) ? activeScreen : frames[0];
-		}
-
-		//------------------------------------------------------
-		//  Actuation
-		//------------------------------------------------------
-
-		init();
-		animate();
+	_init();
+	_animate();
 
 	};
 
