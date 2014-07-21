@@ -77,6 +77,7 @@ require(["jquery", "scene"], function($, Scene) {
 					break;
 				//SPACEBAR
 				case 32:
+					console.log("space");
 					scene.next();
 					break;
 				//RIGHT ARROW

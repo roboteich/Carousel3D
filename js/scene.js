@@ -24,13 +24,14 @@ define([
 	//------------------------------------------------------
 	
 	var _self = this;             /* reference to instance for clear scoping in callbacks and events */
+	var _invalidated = true;      /* properties changed, reconcile on next frame */
 	var _contents = contents;     /* HTMl content to render as frames */
 	var _frame = {
 			width:window.innerWidth,
 			height:window.innerHeight,
 			padding:20,
-			focalLength:1500,
-			rate:13.7
+			focalLength:2000,
+			rate:1                /* pixels per millesecond */
 		}
 
 
@@ -51,6 +52,7 @@ define([
 	var _slides = [];             /* collection of 3D positioned frames within the _world */
 	var _activeSlide = null;      /* selected frame to display fullscreen in camera view */
 	var _nextSlide = null;        /* frame to set active upon transition */
+	var _transition = null;       /* tween animation between slides */
 
 	//------------------------------------------------------
 	//  Initialization
@@ -76,13 +78,12 @@ define([
 		_camera = new THREE.PerspectiveCamera(
 			_wtfFieldOfView(
 				_frame.height, 
-				_frame.focalLength,
-				-_frame.focalLength*_contents.length+1,
-				0),
+				_frame.focalLength
+				),
 			_frame.width/_frame.height
 		);
 
-		_camera.position.set(0,0,_frame.focalLength*1.1);
+		_camera.position.set(0,0,_frame.focalLength*1.25);
 		
 		_renderer = new CSS3DRenderer();
 		_renderer.setSize( _frame.width, _frame.height );
@@ -122,9 +123,8 @@ define([
 					'<p>'+content.body+'</p>' +
 				'</div>'
 			).css({
-				width:_frame.width-_frame.padding*2,
-				height:_frame.height-_frame.padding*2,
-				padding:_frame.padding,
+				width:_frame.width,
+				height:_frame.height,
 				background:content.color
 			});
 
@@ -157,14 +157,18 @@ define([
 
 	this.activateSlide = function(index){
 		_nextSlide = index;
+		console.log("activateSlide :: " + _nextSlide);
 	}
 
 	this.next = function(){
+		console.log("next");
 		this.activateSlide((_activeSlide < _slides.length-1) ? _activeSlide+1 : 0);
+		_invalidate();
 	}
 
 	this.prev = function(){
 		this.activateSlide((_activeSlide >= 0) ? _activeSlide-1 :  _slides.length-1);
+		_invalidate();
 	}
 
 
@@ -172,7 +176,7 @@ define([
 	//  Private Methods
 	//------------------------------------------------------
 
-	//WTF - What The Frustom is Field Of View
+	//WTF - What's The Frustom Field Of View
 	function _wtfFieldOfView(frameH, distance){
 
 		//https://github.com/mrdoob/three.js/issues/1239
@@ -182,6 +186,7 @@ define([
 
 	}
 
+	//WTF - What's The Frustom World For this Slide
 	function _wtfWorldForSlide(index){
 
 		var slideTarget = _slides[index];
@@ -211,57 +216,77 @@ define([
 
 	}
 
+	//WTF - What's the Frustom Spline curve between these two points
+	function _wtfSplineForPoints(from, to){
+
+		var a = from; //start point
+		var c = to;   //end point
+		var b = new THREE.LineCurve3(from, to);  //mid point
+
+		return b;
+
+	}
+
 	//------------------------------------------------------
 	//  Display Methods
 	//------------------------------------------------------
 
-	function _animate() {
+	function _invalidate() {
+		_invalidated = true;
+	}
+
+	function _animate(time) {
 
 		requestAnimationFrame( _animate );
-		_invalidateWorld();
+		_update(time);
 		_renderer.render( _scene, _camera );
 		
 	}
 
-	function _invalidateWorld(){
+	function _update(time){
 
-		if(null !== _nextSlide && _nextSlide !== _activeSlide){
+		if(_invalidated){
 
-			var target = _wtfWorldForSlide(_nextSlide);
+			TWEEN.removeAll();
+
+			var from = {position:_world.position.clone(), rotation:_world.rotation.clone()};
+			var to = _wtfWorldForSlide(_nextSlide);
+			var path = _wtfSplineForPoints(from.position, to.position);
+			var rotations = [(from.rotation.z - to.rotation.z), (from.rotation.y - to.rotation.y) , (from.rotation.x - to.rotation.x)];
+			var duration = Math.round(path.getLength()*_frame.rate);
 			
-			//snap to target position if distance remaining is less than .1 "mm"
-			if(_world.position.distanceTo(target.position) <= .1){
-				
-				_world.position.set(
-					target.position.x, 
-					target.position.y, 
-					target.position.z
-				);
+			_transition = new TWEEN.Tween({progress:0})
+			.to(
+				{progress:1},
+				duration
+			)
+			.onUpdate(function(){
 
-				_world.rotation.set(
-					target.rotation.x, 
-					target.rotation.y, 
-					target.rotation.z
-				);
+					//advance world position toward position inverse to targeted slide along path
+					_world.position.copy(path.getPoint(this.progress));
+						
+					//advance world "euler" rotation toward rotation inverse of targeted slide
+					//apply rotation in reverse "ZYX" order to ensure 
+					_world.rotation.z = from.rotation.z - rotations[0] * this.progress;
+					_world.rotation.y = from.rotation.y - rotations[1] * this.progress;
+					_world.rotation.x = from.rotation.x - rotations[2] * this.progress;
 
+					
+					_camera.position.z = _frame.focalLength*1.1 + (_frame.focalLength * 4 * Math.sin(this.progress*Math.PI));
+
+			})
+			.easing(TWEEN.Easing.Quadratic.InOut)
+			.onComplete(function(){
 				_activateComplete();
+				_transition = null;
+			})
+			.start();
 
-			}else{
+		}
 
-				//advance world position toward position inverse to targeted slide
-				_world.position.x -= (_world.position.x - target.position.x)/_frame.rate;
-				_world.position.y -= (_world.position.y - target.position.y)/_frame.rate;
-				_world.position.z -= (_world.position.z - target.position.z)/_frame.rate;
-				
-				//advance world "euler" rotation toward rotation inverse of targeted slide
-				//apply rotation in reverse "ZYX" order to ensure 
-				_world.rotation.z -= (_world.rotation.z - target.rotation.z)/_frame.rate;
-				_world.rotation.y -= (_world.rotation.y - target.rotation.y)/_frame.rate;
-				_world.rotation.x -= (_world.rotation.x - target.rotation.x)/_frame.rate;
 
-			}
-
-		}	
+		if(_transition && time) _transition.update(time);	
+		_invalidated = false;
 
 	}
 
@@ -272,6 +297,7 @@ define([
 	function _activateComplete(){
 		_activeSlide = _nextSlide;
 		_nextSlide = null;
+		console.log("_activateComplete :: " + _activeSlide);
 	}
 
 	//------------------------------------------------------
