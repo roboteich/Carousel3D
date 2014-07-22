@@ -82,7 +82,7 @@ define([
 			_frame.width/_frame.height
 		);
 
-		_camera.position.set(0,0,_frame.focalLength*1.1);
+		_camera.position.set(0,0,_frame.focalLength);
 		
 		_renderer = new CSS3DRenderer();
 		_renderer.setSize( _frame.width, _frame.height );
