@@ -29,9 +29,9 @@ define([
 	var _frame = {
 			width:window.innerWidth,
 			height:window.innerHeight,
-			padding:20,
-			focalLength:2000,
-			rate:1                /* pixels per millesecond */
+			focalLength:700,
+			zooming:4,
+			rate:.5                /* pixels per millesecond */
 		}
 
 
@@ -62,7 +62,8 @@ define([
 		
 		_initializeParameters();
 		_initScene();
-		_initFrames();
+		_initSlides();
+		_attachListeners();
 		_animate();
 
 	}
@@ -73,8 +74,6 @@ define([
 
 	function _initScene(){
 		_scene = new THREE.Scene();
-		
-		//TODO: Determine why camera position must be 1.1x focal length
 		_camera = new THREE.PerspectiveCamera(
 			_wtfFieldOfView(
 				_frame.height, 
@@ -83,8 +82,8 @@ define([
 			_frame.width/_frame.height
 		);
 
-		_camera.position.set(0,0,_frame.focalLength*1.25);
-		
+
+		_camera.position.set(0,0,_frame.focalLength);		
 		_renderer = new CSS3DRenderer();
 		_renderer.setSize( _frame.width, _frame.height );
 		
@@ -95,13 +94,13 @@ define([
 		_node.append( $(_renderer.domElement) );
 	}
 
-	function _initFrames(){
+	function _initSlides(){
 		_createWorld();
 		_createSlidesFromContent();
 	}
 
 	function _createWorld(){
-		var $worldEl = $('<div></div>');
+		var $worldEl = $('<div class="scene-world"></div>');
 			$worldEl.css({width:_frame.width,height:_frame.height});
 
 		_world = new THREE.CSS3DObject($worldEl[0]);
@@ -112,15 +111,19 @@ define([
 	function _createSlidesFromContent(){
 		
 		var count = _contents.length;
+		var len = _frame.focalLength
+		var radius = new THREE.Vector3(len, len, len);
 
 		$.each(_contents, function(index, content){
 
-			var $slideEl, _slide, len;
+			var $slideEl, _slide;
 
 			$slideEl = $(
-				'<div>' +
+				'<div id="scene-slide-'+index+'" class="scene-slide">' +
 					'<h2>'+content.title+'</h2>' +
 					'<p>'+content.body+'</p>' +
+					((index>0)?'<a class="scene-link" href="#prev">prev</a>':'')+
+					((index<count-1)?'<a class="scene-link" href="#next">next</a>':'<a class="scene-link" href="#next">restart</a>')+
 				'</div>'
 			).css({
 				width:_frame.width,
@@ -129,26 +132,49 @@ define([
 			});
 
 			_slide = new THREE.CSS3DObject( $slideEl[0] );
-			_slides.push(_slide);
-
-			len = _frame.focalLength
-
-			//apply random spacing and random rotation
-			_slide.position.set(
-				- len + Math.random() * len * 2,
-				- len + Math.random() * len * 2,
-				- len + Math.random() * count
+			
+			//place slide at 1x -> 2x 
+			//focal distance from world center
+			_slide.position.copy(radius);
+			_slide.position.multiplyScalar(1+Math.random());
+			
+			//randomize slide position at
+			//radius from world center
+			_slide.position.applyEuler(
+				new THREE.Euler(
+					Math.random()*Math.PI*2,
+					Math.random()*Math.PI*2,
+					Math.random()*Math.PI*2
+				)
 			);
 
+			//maximize distance between rotations
+			//add some random variation
 			_slide.rotation.set(
-				Math.PI/2 - Math.random() * Math.PI,
-				Math.PI/2 - Math.random() * Math.PI,
-				Math.PI/2 - Math.random()
+				Math.PI*(index%3) - Math.PI/3 + (Math.random() * Math.PI * 2/3),
+				Math.PI*(index%3) - Math.PI/3 + (Math.random() * Math.PI * 2/3),
+				Math.PI*(index%3) - Math.PI/3 + (Math.random() * Math.PI * 2/3)
 			);
 
+			_slides.push(_slide);
 			_world.add( _slide );
 
 		}); 
+	}
+
+	function _attachListeners(){
+		_node.on("click", ".scene-link", function(ev){
+			switch($(this).attr("href")){
+				case "#next":
+					_self.next();
+					break;
+				case "#prev":
+					_self.prev();
+					break;
+			}
+
+			return false;
+		});
 	}
 
 	//------------------------------------------------------
@@ -157,11 +183,9 @@ define([
 
 	this.activateSlide = function(index){
 		_nextSlide = index;
-		console.log("activateSlide :: " + _nextSlide);
 	}
 
 	this.next = function(){
-		console.log("next");
 		this.activateSlide((_activeSlide < _slides.length-1) ? _activeSlide+1 : 0);
 		_invalidate();
 	}
@@ -219,11 +243,11 @@ define([
 	//WTF - What's the Frustom Spline curve between these two points
 	function _wtfSplineForPoints(from, to){
 
-		var a = from; //start point
-		var c = to;   //end point
-		var b = new THREE.LineCurve3(from, to);  //mid point
+		var segment = new THREE.Line3(from, to);
+		var center = segment.center();
+		center.z-=(_frame.focalLength*_frame.zooming);
 
-		return b;
+		return new THREE.SplineCurve3([from, center, to]);
 
 	}
 
@@ -247,19 +271,27 @@ define([
 
 		if(_invalidated){
 
+
 			TWEEN.removeAll();
 
 			var from = {position:_world.position.clone(), rotation:_world.rotation.clone()};
 			var to = _wtfWorldForSlide(_nextSlide);
 			var path = _wtfSplineForPoints(from.position, to.position);
-			var rotations = [(from.rotation.z - to.rotation.z), (from.rotation.y - to.rotation.y) , (from.rotation.x - to.rotation.x)];
 			var duration = Math.round(path.getLength()*_frame.rate);
+			var rotations = [
+				(from.rotation.z - to.rotation.z), 
+				(from.rotation.y - to.rotation.y) , 
+				(from.rotation.x - to.rotation.x)
+			];
 			
 			_transition = new TWEEN.Tween({progress:0})
 			.to(
 				{progress:1},
 				duration
 			)
+			.onStart(function(){
+				_node.find(".scene-slide").show();
+			})
 			.onUpdate(function(){
 
 					//advance world position toward position inverse to targeted slide along path
@@ -267,16 +299,20 @@ define([
 						
 					//advance world "euler" rotation toward rotation inverse of targeted slide
 					//apply rotation in reverse "ZYX" order to ensure 
-					_world.rotation.z = from.rotation.z - rotations[0] * this.progress;
-					_world.rotation.y = from.rotation.y - rotations[1] * this.progress;
-					_world.rotation.x = from.rotation.x - rotations[2] * this.progress;
+					_world.rotation.set(
+						(from.rotation.x - rotations[2] * this.progress),
+						(from.rotation.y - rotations[1] * this.progress),
+						(from.rotation.z - rotations[0] * this.progress)
+					)
+						
 
+					_camera.setLens(_frame.focalLength - (_frame.focalLength*.75 * Math.sin(this.progress*Math.PI)), _frame.height);
 					
-					_camera.position.z = _frame.focalLength*1.25 + (_frame.focalLength * 4 * Math.sin(this.progress*Math.PI));
 
 			})
-			.easing(TWEEN.Easing.Quadratic.InOut)
+			.easing(TWEEN.Easing.Sinusoidal.InOut)
 			.onComplete(function(){
+				_node.find(".scene-slide").not("#scene-slide-"+_nextSlide).hide();
 				_activateComplete();
 				_transition = null;
 			})
@@ -285,7 +321,9 @@ define([
 		}
 
 
-		if(_transition && time) _transition.update(time);	
+		if(_transition && time) {
+			_transition.update(time);	
+		} 
 		_invalidated = false;
 
 	}
@@ -297,7 +335,6 @@ define([
 	function _activateComplete(){
 		_activeSlide = _nextSlide;
 		_nextSlide = null;
-		console.log("_activateComplete :: " + _activeSlide);
 	}
 
 	//------------------------------------------------------

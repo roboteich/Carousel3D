@@ -6,18 +6,13 @@ require.config({
   "baseUrl" : "/js",
   "paths"   : {
     "jquery" : "//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min",
-    "modernizr" : "vendor/modernizr-2.6.2-respond-1.1.0.min",
     "three" : "vendor/threejs/three.min",
     "three-css3d" : "vendor/threejs/CSS3DRenderer",
-    "three-trackball" : "vendor/threejs/TrackballControls",
     "tween" : "vendor/tween.min"
   },
   "shim" : {
     "jquery" : {
       "exports" : "$"
-    },
-    "modernizr" : {
-    	"exports" : "Modernizr"
     },
     "three" : {
     	"exports" : "THREE"
@@ -25,10 +20,6 @@ require.config({
     "three-css3d" : {
     	"deps": ["three"],
     	"exports" : "THREE.CSS3DRenderer"
-    },
-    "three-trackball" : {
-    	"deps": ["three"],
-    	"exports" : "THREE.TrackballControls"
     },
     "tween" : {
     	"exports" : "TWEEN"
@@ -77,7 +68,6 @@ require(["jquery", "scene"], function($, Scene) {
 					break;
 				//SPACEBAR
 				case 32:
-					console.log("space");
 					scene.next();
 					break;
 				//RIGHT ARROW
@@ -87,6 +77,7 @@ require(["jquery", "scene"], function($, Scene) {
 			}
 
 		});
+
 		/**
 		* logic
 		* -- Screen State
