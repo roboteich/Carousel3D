@@ -272,7 +272,7 @@ define([
 					_world.rotation.x = from.rotation.x - rotations[2] * this.progress;
 
 					
-					_camera.position.z = _frame.focalLength*1.1 + (_frame.focalLength * 4 * Math.sin(this.progress*Math.PI));
+					_camera.position.z = _frame.focalLength*1.25 + (_frame.focalLength * 4 * Math.sin(this.progress*Math.PI));
 
 			})
 			.easing(TWEEN.Easing.Quadratic.InOut)
