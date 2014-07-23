@@ -3,7 +3,7 @@
 */
 
 require.config({
-  "baseUrl" : "/js",
+  "baseUrl" : "./js",
   "paths"   : {
     "jquery" : "//ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min",
     "three" : "vendor/threejs/three.min",
@@ -27,8 +27,7 @@ require.config({
   }
 });
 
-require(["jquery", "scene"], function($, Scene) {
-
+require(["jquery", "components/slideshow3D"], function($, SlideShow3D) {
 
 		/**
 		* data
@@ -40,7 +39,9 @@ require(["jquery", "scene"], function($, Scene) {
 			slides.push(
 				{
 					title: "slide"+i,
-					body:"lorem ipsum " + i,
+					body:"lorem ipsum " + i +
+					((i>0)?'<br /><a class="scene-link" href="#prev">prev</a>':'')+
+					((i<slideCount-1)?'<br /><a class="scene-link" href="#next">next</a>':'<a class="scene-link" href="#next">restart</a>'),
 					color:"rgba("+
 						Math.round(Math.random()*255)+","
 						+Math.round(Math.random()*255)+","
@@ -54,28 +55,44 @@ require(["jquery", "scene"], function($, Scene) {
 		* 3D 
 		*/
 
-		var scene = new Scene("#screens", slides);
+		var slideshow = new SlideShow3D("#screens", slides);
 		
 		/**
 		* Interaction
 		*/
+		$("#screens").on("click", ".scene-link", function(ev){
+			switch($(this).attr("href")){
+				case "#next":
+					slideshow.next();
+					break;
+				case "#prev":
+					slideshow.prev();
+					break;
+			}
+
+			return false;
+		});
 
 		$(document).keypress(function(ev){
 			switch(ev.which){
 				//LEFT ARROW
 				case 37:
-					scene.next();
+					slideshow.next();
 					break;
 				//SPACEBAR
 				case 32:
-					scene.next();
+					slideshow.next();
 					break;
 				//RIGHT ARROW
 				case 39:
-					scene.prev();
+					slideshow.prev();
 					break;
 			}
 
+		});
+
+		$(window).resize(function(ev){
+			slideshow.set({width:window.innerWidth, height:window.innerHeight});
 		});
 
 		/**
