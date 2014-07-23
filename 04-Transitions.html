@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+        <title>CSS 3D SlideShow with ThreeJS</title>
+        <meta name="description" content="A demo 3d presentation component">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <link rel="stylesheet" href="css/normalize.min.css">
+
+        <style>
+            .slide3D { border:1px solid #888888; background: #CCCCCC; }
+            .slide3D-body {  padding:12px;}
+            #controls {position:absolute;top:50%;width:100%;}
+            #controls .controls-nav {
+                position:absolute;
+                display: block;
+                background: white;
+                color:#666666;
+                font-weight: bold;
+                text-decoration: none;
+                font-size: 14px;
+                line-height: 20px;
+                height:20px;
+                margin-top:-10px;
+                padding:0 10px;
+            }
+            #controls-next {
+                right:0;
+                text-align: right;
+            }
+            #controls-prev {
+                left:0;
+                padding-left: 10px;
+            }
+
+        </style>
+    </head>
+    <body>
+        <div class="main-container">
+            <div class="main wrapper clearfix">
+				<div id="carousel3D">
+                    <div id="slide3D-0" class="slide3D">
+                        <div class="slide3D-body">Demo 0</div>
+                    </div>
+                    <div id="slide3D-1" class="slide3D">
+                        <div class="slide3D-body">Demo 1</div>
+                    </div>
+                    <div id="slide3D-2" class="slide3D">
+                        <div class="slide3D-body">Demo 2</div>
+                    </div>
+                    <div id="slide3D-3" class="slide3D">
+                        <div class="slide3D-body">Demo 3</div>
+                    </div>
+                    <div id="slide3D-4" class="slide3D">
+                        <div class="slide3D-body">Demo 4</div>
+                    </div>
+                    <div id="slide3D-5" class="slide3D">
+                        <div class="slide3D-body">Demo 5</div>
+                    </div>
+                </div>
+                <div id="controls">
+                    <a id="controls-next" class="controls-nav" href="#next">next</a>
+                    <a id="controls-prev" class="controls-nav" href="#prev">prev</a>
+                </div>
+            </div>
+        </div>
+    </body>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js" type="text/javascript"></script>
+    <script src="./js/vendor/threejs/three.min.js"></script>
+    <script src="./js/vendor/threejs/CSS3DRenderer.js"></script>
+    <script src="./js/vendor/tween.min.js"></script>
+    <script type="text/javascript">
+        
+        (function($){
+
+
+            /**
+            *   This demo utilizes the ThreeJS library to build
+            *   a hypothetical Slide Carousel for viewing
+            *   slides from the Camera perspective of a 3D space
+            */
+
+            //------------------------------------------------------
+            //  Private Parameters
+            //------------------------------------------------------
+            
+            /**
+            * The field of view and essentially the perspective 
+            * of the 3D projection will is defined by the configuration
+            * of a virtual camera lens.
+            */
+            var _lens = {
+                    width:$(window).width(),
+                    height:$(window).height(),
+                    focalLength:700,
+                    rate:.5 
+                }
+
+            //------------------------------------------------------
+            //  3D Rendering Components
+            //------------------------------------------------------
+
+            var _scene;                   /* Root container of 3D visualization */
+            var _camera;                  /* 3D Camera for visualizing scene */
+            var _renderer;                /* Draws scene/camera configuration to display */
+            var _controls;
+
+            //------------------------------------------------------
+            //  Private Display Properties
+            //------------------------------------------------------
+
+            var _viewport = $("#carousel3D");
+            var _deck;                  /* holds the slides */           
+            var _activeSlide = null;      /* selected slide index to display fullscreen in camera view */
+            var _nextSlide = 0;        /* slide index to set active upon transition */
+            var _transition = null;
+    
+            //------------------------------------------------------
+            //  Startup
+            //------------------------------------------------------
+
+            (function(){
+                _initScene();
+                _initSlides();
+                _attachListeners();
+                _resize();
+                _slide();
+                _update();
+            })();
+
+            //------------------------------------------------------
+            //  Initialization
+            //------------------------------------------------------
+
+            /**
+            *  Create the three essential elements to render
+            *  3d Elements to screen with ThreeJS
+            *  1. The Scene is the root space defining the 3d coordinate system
+            *  2. The Camera defines a view "Frustum" into the Scene and it's elements
+            *  3. The Renderer will translate the ThreeJS Scene and Camera configurations
+            *     into transforms projecting DOM elements in 3D space.
+            */
+            function _initScene(){
+                
+                _renderer = new THREE.CSS3DRenderer();
+                _scene = new THREE.Scene();
+                _camera = new THREE.PerspectiveCamera(
+                    _wtfFieldOfView(), 
+                    _lens.width/_lens.height
+                );
+
+                _viewport.append( $(_renderer.domElement) );
+            }
+
+            /**
+            * Group all the slides and give them 3D context
+            */
+            function _initSlides(){
+                _createDeck();
+                _attachSlides();
+            }
+
+            function _createDeck(){
+
+                var $deckEl = $('<div class="deck3D"></div>');
+                _deck = new THREE.CSS3DObject($deckEl[0]);
+                
+                //This reorder is very important
+                //The application of rotation to the world
+                //Occurs in reverse of the child elements
+                //to face it to the screen
+                //It's like undoing a rubiks cube
+                _deck.rotation.reorder("ZYX");
+                _scene.add(_deck);
+
+            }
+
+            function _attachSlides(){
+
+                //slides will radiate out from the origin
+                //at about the focal distance
+                var len = _lens.focalLength
+
+                //Vectors can be used to represent speed in a given direction
+                //Or just a point in space
+                var radius = new THREE.Vector3(len, len, len);
+
+                $(".slide3D").each(function(index, slide){
+
+                    var slide3D = new THREE.CSS3DObject(slide);
+                    _deck.add(slide3D);
+
+                    //place slide at 1x -> 2x 
+                    //focal distance from world center
+                    slide3D.position.copy(radius);
+                    slide3D.position.multiplyScalar(1+Math.random());
+                    
+                    //randomize slide position at
+                    //radius from world center
+                    slide3D.position.applyEuler(
+                        new THREE.Euler(
+                            _randomAngle(),
+                            _randomAngle(),
+                            _randomAngle()
+                        )
+                    );
+
+                    //maximize distance between rotations
+                    //add some random variation
+                    slide3D.rotation.set(
+                        Math.PI*(index%3) - Math.PI/3 + (Math.random() * Math.PI * 2/3),
+                        Math.PI*(index%3) - Math.PI/3 + (Math.random() * Math.PI * 2/3),
+                        Math.PI*(index%3) - Math.PI/3 + (Math.random() * Math.PI * 2/3)
+                    );
+                }); 
+            }
+
+            function _attachListeners(){
+                $(window).resize(_handleResize); 
+                $(".controls-nav").click(_handleBrowse);
+            }
+
+            //------------------------------------------------------
+            //  Controller Methods
+            //------------------------------------------------------
+
+            function _activateSlide(index){
+                _nextSlide = index;
+                _slide();
+            }
+
+            function _next(){
+                _activateSlide((_activeSlide < _deck.children.length-1) ? _activeSlide+1 : 0);
+            }
+
+            function _prev(){
+                _activateSlide((_activeSlide > 0) ? _activeSlide-1 :  _deck.children.length-1);
+            }
+
+            function _activateComplete(){
+                _activeSlide = _nextSlide;
+                _nextSlide = null;
+            }
+
+            //------------------------------------------------------
+            //  Helper Methods
+            //------------------------------------------------------
+
+            function _randomAngle(){
+               return Math.random()*Math.PI*2;
+            }
+
+
+            //WTF - What's The Frustom Field Of View
+            function _wtfFieldOfView(){
+
+                //https://github.com/mrdoob/three.js/issues/1239
+                // vertical frustum field of view angle in radians = 2 * arctan(frame height / (2 * focal length))
+                // multiply by 180/Math.PI for angle in degrees
+                return 2 * Math.atan(_lens.height / ( 2 * _lens.focalLength )) * 180/Math.PI;
+
+            }
+
+            //WTF - What's The Frustom Inverse Position For this Slide
+            // What position must the deck be in to show the slide to the camera
+            function _wtfDeckInverseForSlide(index){
+
+                var slideTarget = _deck.children[index];
+                var slideRotation = slideTarget.rotation;
+                var slidePosition = slideTarget.position;
+                var targetPosition = slidePosition.clone();
+
+                var targetRotation = new THREE.Euler(
+                    -slideRotation.x,
+                    -slideRotation.y,
+                    -slideRotation.z,
+                    //This magical line of code thanks to Evan Ribnick
+                    //3M Computer Vision Engineer.  
+                    //Took me 3 days of beating my head
+                    //Took him 3 minutes, and a better understanding
+                    //of the Euler (pronounced "oy-ler") order
+                    "ZYX"
+                );
+
+                targetPosition.applyEuler(targetRotation);
+                
+                targetPosition.x*= -1;
+                targetPosition.y*= -1;
+                targetPosition.z*= -1;
+
+                return {position:targetPosition, rotation:targetRotation};
+
+            }
+
+            //------------------------------------------------------
+            //  Display Methods
+            //------------------------------------------------------
+
+            /*
+            *  For best performance save screen renders for GPU cycles.
+            */
+            function _update(time) {
+                requestAnimationFrame( _update );
+                if(time && _transition) _transition.update(time);
+                _renderer.render(_scene, _camera);
+            }
+
+            /*
+            *  Size the deck of slides, viewport and rendering engine
+            *  to fill the full window with the 3D projection.
+            *  Adjust camera lens and position to fill frame with slide deck
+            */
+            function _resize(){
+                _renderer.setSize(_lens.width, _lens.height);
+                _camera.setLens(_lens.focalLength, _lens.height);
+                _camera.position.set(0,0,_lens.focalLength);
+                $(".slide3D, .deck3D").css({width:_lens.width,height:_lens.height});
+            }
+
+            function _slide(){
+
+                TWEEN.removeAll();
+
+                var from = {position:_deck.position.clone(), rotation:_deck.rotation.clone()};
+                var to = _wtfDeckInverseForSlide(_nextSlide);
+                var path = new THREE.LineCurve3(from.position, to.position);
+                var duration = Math.round(path.getLength()*_lens.rate);
+                
+                var rotations = [
+                    (from.rotation.z - to.rotation.z), 
+                    (from.rotation.y - to.rotation.y), 
+                    (from.rotation.x - to.rotation.x)
+                ];
+                
+                _transition = new TWEEN.Tween({progress:0})
+                
+                .to({progress:1},duration)
+                .easing(TWEEN.Easing.Sinusoidal.InOut)
+                .onStart(function(){_viewport.find(".slide3D").show();})
+                .onUpdate(function(){
+
+                    if(this.progress) {
+                        
+                        //advance world position toward position 
+                        //inverse to targeted slide along path
+                        _deck.position.copy(path.getPoint(this.progress));
+                            
+                        //advance world "euler" rotation toward 
+                        //rotation inverse of targeted slide apply 
+                        //rotation in reverse "ZYX" order to ensure 
+                        _deck.rotation.set(
+                            (from.rotation.x - rotations[2] * this.progress),
+                            (from.rotation.y - rotations[1] * this.progress),
+                            (from.rotation.z - rotations[0] * this.progress)
+                        )
+                        
+                    }
+
+                })
+                .onComplete(function(){
+                    _viewport.find(".slide3D").not("#slide3D-"+_nextSlide).hide();
+                    _activateComplete();
+                    _transition = null;
+                })
+                .start();
+        
+            }
+
+            //------------------------------------------------------
+            //  Event Handlers
+            //------------------------------------------------------
+
+            /*
+            * Ensure slideshow fills the window on resize
+            */
+            function _handleResize(ev){
+                _lens.width = $(window).width();
+                _lens.height = $(window).height();
+                _resize();
+            }
+
+            function _handleBrowse(ev){
+                switch($(this).attr("href")){
+                    case "#next":
+                        _next();
+                        break;
+                    case "#prev":
+                        _prev();
+                        break;
+                }
+
+                return false;
+            }
+
+
+
+
+        })(jQuery);
+
+        
+    </script>
+</html>
