@@ -127,7 +127,6 @@
                 _initSlides();
                 _attachListeners();
                 _resize();
-                _slide();
                 _update();
             })();
 
@@ -229,7 +228,6 @@
 
             function _activateSlide(index){
                 _nextSlide = index;
-                _slide();
             }
 
             function _next(){
@@ -315,6 +313,7 @@
             */
             function _update(time) {
                 requestAnimationFrame( _update );
+                if(time && null !==_nextSlide  && null == _transition) _slide(time);
                 if(time && _transition) _transition.update(time);
                 _renderer.render(_scene, _camera);
             }
@@ -331,7 +330,7 @@
                 $(".slide3D, .deck3D").css({width:_lens.width,height:_lens.height});
             }
 
-            function _slide(){
+            function _slide(time){
 
                 TWEEN.removeAll();
 
@@ -376,7 +375,7 @@
                     _activateComplete();
                     _transition = null;
                 })
-                .start();
+                .start(time);
         
             }
 
