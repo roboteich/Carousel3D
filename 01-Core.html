@@ -7,29 +7,54 @@
         <meta name="description" content="A demo 3d presentation component">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        <link rel="stylesheet" href="css/normalize.min.css">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <link rel="apple-touch-icon" href="/apple-touch-icon-precomposed.png">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black">
 
-        <style>
-            .slide3D { border:1px solid #888888; background: #CCCCCC; }
-            .slide3D-body {  padding:12px;}
-        </style>
+        <link rel="stylesheet" href="css/normalize.min.css">
+        <link rel="stylesheet" href="css/main.css">
     </head>
     <body>
         <div class="main-container">
             <div class="main wrapper clearfix">
-				<div id="carousel3D">
+                <div id="carousel3D">
                     <div id="slide3D-0" class="slide3D">
-                        <div class="slide3D-body">Demo 0</div>
+                        <h2 class="slide3D-head">A <em>Scene</em>, a <em>Camera</em> and a <em>Renderer</em> Walk Into A Euclidean Space...</h2>
+                        <div class="slide3D-body"><img src="img/euclidian.png"></div>
                     </div>
                     <div id="slide3D-1" class="slide3D">
-                        <div class="slide3D-body">Demo 1</div>
+                        <h2 class="slide3D-head">WTF - What's The <em>Frustom</em>?</h2>
+                        <div class="slide3D-body"><img src="img/frustum.png"></div>
                     </div>
                     <div id="slide3D-2" class="slide3D">
-                        <div class="slide3D-body">Demo 2</div>
+                        <h2 class="slide3D-head">WTFFOV - What's The Frustom <em>Field of View</em>?</h2>
+                        <div class="slide3D-body"><img src="img/fieldofview.png"></div>
+                    </div>
+                    <div id="slide3D-3" class="slide3D">
+                        <h2 class="slide3D-head">What's The <em>Vector</em> Victor?</h2>
+                        <div class="slide3D-body"><img src="img/vector.png"></div>
+                    </div>
+                    <div id="slide3D-4" class="slide3D">
+                        <h2 class="slide3D-head"><em>Euler Angles</em> (Pronounced 'oi-ler')  to Bring Order to Rotation.</h2>
+                        <div class="slide3D-body"><img src="img/Euler.gif"></div>
+                    </div>
+                    <div id="slide3D-5" class="slide3D">
+                        <h2 class="slide3D-head"><em>Tweens</em> Are So ADD, They Just Keep Moving.</h2>
+                        <div class="slide3D-body"><img src="img/tween.gif"></div>
+                    </div>
+                     <div id="slide3D-6" class="slide3D">
+                        <h2 class="slide3D-head">The Coolest Distance Between Two Points is a Curved <em>Spline</em>.</h2>
+                        <div class="slide3D-body"><img src="img/spline.png"></div>
+                    </div>
+                     <div id="slide3D-7" class="slide3D">
+                        <h2 class="slide3D-head">As Far as I'm Concerned The Only Way to See The <em>Matrix</em> is Projected</h2>
+                        <div class="slide3D-body"><img src="img/matrix.png"></div>
+                    </div>
+                     <div id="slide3D-8" class="slide3D">
+                        <h2 class="slide3D-head">So <em>ThreeJS</em> Because Math!</h2>
+                        <div class="slide3D-body"><img src="img/threejs.png"></div>
                     </div>
                 </div>
-            </div>
-        </div>
     </body>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.0/jquery.min.js" type="text/javascript"></script>
     <script src="./js/vendor/threejs/three.min.js"></script>
